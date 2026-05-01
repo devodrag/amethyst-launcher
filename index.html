@@ -1,677 +1,109 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Amethyst Launcher</title>
-  <link rel="icon" href="assets/icon.png"/>
-
-  <!-- Tailwind via CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            void:     '#0F051D',
-            deep:     '#130824',
-            crystal:  '#1A0B2E',
-            panel:    '#200D38',
-            surface:  '#2A1245',
-            rim:      '#3D1F6A',
-            amethyst: '#A855F7',
-            violet:   '#7C3AED',
-            lavender: '#C084FC',
-            mist:     '#E9D5FF',
-            dim:      '#6B21A8',
-          },
-          fontFamily: {
-            display: ['Montserrat', 'sans-serif'],
-            body:    ['Nunito Sans', 'sans-serif'],
-          },
-          boxShadow: {
-            'crystal':  '0 0 0 1px rgba(168,85,247,0.15), 0 8px 32px rgba(124,58,237,0.2)',
-            'glow-sm':  '0 0 12px rgba(168,85,247,0.4)',
-            'glow':     '0 0 24px rgba(168,85,247,0.5)',
-            'glow-lg':  '0 0 48px rgba(168,85,247,0.6)',
-            'launch':   '0 0 60px rgba(168,85,247,0.7), 0 0 120px rgba(124,58,237,0.4)',
-          },
-          backdropBlur: { glass: '16px' },
-          animation: {
-            'pulse-slow':   'pulse 3s cubic-bezier(0.4,0,0.6,1) infinite',
-            'float':        'float 6s ease-in-out infinite',
-            'shimmer':      'shimmer 2.5s linear infinite',
-            'orb-drift':    'orb-drift 20s ease-in-out infinite',
-            'spin-slow':    'spin 12s linear infinite',
-          },
-          keyframes: {
-            float: {
-              '0%,100%': { transform: 'translateY(0px)' },
-              '50%':     { transform: 'translateY(-10px)' },
-            },
-            shimmer: {
-              '0%':   { backgroundPosition: '-200% 0' },
-              '100%': { backgroundPosition:  '200% 0' },
-            },
-            'orb-drift': {
-              '0%,100%': { transform: 'translate(0,0) scale(1)' },
-              '33%':     { transform: 'translate(30px,-20px) scale(1.05)' },
-              '66%':     { transform: 'translate(-20px,15px) scale(0.97)' },
-            },
-          },
-        }
-      }
-    }
-  </script>
-
-  <!-- Google Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&family=Nunito+Sans:wght@300;400;600&display=swap" rel="stylesheet"/>
-
-  <style>
-    /* ── Base ── */
-    *, *::before, *::after { box-sizing: border-box; }
-    html, body { width:100%; height:100%; overflow:hidden; margin:0; }
-    body {
-      background: #0F051D;
-      font-family: 'Nunito Sans', sans-serif;
-      -webkit-font-smoothing: antialiased;
-      user-select: none;
-    }
-    ::-webkit-scrollbar { width: 4px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #6B21A8; border-radius: 2px; }
-
-    /* ── Drag region ── */
-    .drag { -webkit-app-region: drag; }
-    .no-drag { -webkit-app-region: no-drag; }
-
-    /* ── Glass panel ── */
-    .glass {
-      background: rgba(26,11,46,0.72);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid rgba(168,85,247,0.12);
-    }
-    .glass-bright {
-      background: rgba(42,18,69,0.65);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid rgba(168,85,247,0.2);
-    }
-
-    /* ── Ambient orbs ── */
-    .orb {
-      position: absolute;
-      border-radius: 50%;
-      filter: blur(80px);
-      pointer-events: none;
-      opacity: 0.35;
-      animation: orb-drift 20s ease-in-out infinite;
-    }
-
-    /* ── Nav item ── */
-    .nav-btn {
-      display: flex; align-items: center; gap: 10px;
-      padding: 10px 14px;
-      border-radius: 12px;
-      color: #C084FC;
-      font-size: 13px; font-weight: 600;
-      letter-spacing: 0.02em;
-      transition: all 0.2s ease;
-      width: 100%;
-      text-align: left;
-      cursor: pointer;
-      border: none; background: none;
-    }
-    .nav-btn:hover { background: rgba(168,85,247,0.12); color: #E9D5FF; }
-    .nav-btn.active {
-      background: rgba(168,85,247,0.2);
-      color: #A855F7;
-      box-shadow: inset 0 0 0 1px rgba(168,85,247,0.25);
-    }
-    .nav-icon { width: 17px; height: 17px; flex-shrink: 0; }
-
-    /* ── Page transitions ── */
-    .page { display: none; flex-direction: column; height: 100%; }
-    .page.active { display: flex; }
-
-    /* ── Loader type selector ── */
-    .loader-btn {
-      display: flex; flex-direction: column; align-items: center; gap: 5px;
-      padding: 10px 12px;
-      border-radius: 12px;
-      border: 1px solid rgba(168,85,247,0.15);
-      background: rgba(26,11,46,0.5);
-      color: #9CA3AF;
-      font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
-      cursor: pointer; transition: all 0.2s ease;
-      flex: 1;
-    }
-    .loader-btn:hover { border-color: rgba(168,85,247,0.4); color: #C084FC; }
-    .loader-btn.active {
-      border-color: #A855F7;
-      background: rgba(168,85,247,0.18);
-      color: #E9D5FF;
-      box-shadow: 0 0 16px rgba(168,85,247,0.25);
-    }
-    .loader-btn .loader-icon { font-size: 20px; }
-
-    /* ── Version list ── */
-    .version-list {
-      max-height: 160px;
-      overflow-y: auto;
-      display: flex; flex-direction: column; gap: 2px;
-    }
-    .version-item {
-      padding: 7px 12px;
-      border-radius: 8px;
-      font-size: 12.5px; font-weight: 600;
-      color: #C084FC;
-      cursor: pointer;
-      transition: all 0.15s ease;
-      display: flex; align-items: center; gap: 8px;
-    }
-    .version-item:hover { background: rgba(168,85,247,0.12); color: #E9D5FF; }
-    .version-item.selected {
-      background: rgba(168,85,247,0.22);
-      color: #A855F7;
-      box-shadow: inset 0 0 0 1px rgba(168,85,247,0.3);
-    }
-    .version-dot {
-      width: 6px; height: 6px;
-      border-radius: 50%; flex-shrink: 0;
-    }
-    .dot-release { background: #A855F7; }
-    .dot-snapshot { background: #6B7280; }
-    .dot-old { background: #374151; }
-
-    /* ── Launch button ── */
-    .launch-btn {
-      position: relative;
-      overflow: hidden;
-      background: linear-gradient(135deg, #7C3AED 0%, #A855F7 50%, #7C3AED 100%);
-      background-size: 200% 200%;
-      border: none; border-radius: 16px;
-      color: #fff;
-      font-family: 'Montserrat', sans-serif;
-      font-size: 16px; font-weight: 900;
-      letter-spacing: 0.15em;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      animation: shimmer 3s linear infinite;
-    }
-    .launch-btn::before {
-      content: '';
-      position: absolute; inset: 0;
-      background: linear-gradient(135deg, transparent 30%, rgba(255,255,255,0.1) 50%, transparent 70%);
-      background-size: 200% 200%;
-      animation: shimmer 2.5s linear infinite;
-    }
-    .launch-btn:hover {
-      transform: translateY(-3px) scale(1.02);
-      box-shadow: 0 0 40px rgba(168,85,247,0.7), 0 0 80px rgba(124,58,237,0.4);
-    }
-    .launch-btn:active { transform: translateY(-1px) scale(0.99); }
-    .launch-btn:disabled {
-      background: linear-gradient(135deg, #2A1245, #3D1F6A);
-      box-shadow: none; cursor: not-allowed; transform: none;
-      animation: none;
-    }
-    .launch-btn-pulse {
-      position: absolute; inset: -4px;
-      border-radius: 20px;
-      border: 2px solid rgba(168,85,247,0.5);
-      opacity: 0;
-      pointer-events: none;
-      animation: launch-pulse 2s ease-out infinite;
-    }
-    @keyframes launch-pulse {
-      0%   { transform: scale(1); opacity: 0.7; }
-      100% { transform: scale(1.1); opacity: 0; }
-    }
-
-    /* ── RAM slider ── */
-    .ram-slider {
-      -webkit-appearance: none; appearance: none;
-      width: 100%; height: 6px;
-      border-radius: 3px;
-      background: rgba(109,33,168,0.4);
-      outline: none; cursor: pointer;
-    }
-    .ram-slider::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 22px; height: 22px; border-radius: 50%;
-      background: linear-gradient(135deg, #7C3AED, #A855F7);
-      cursor: pointer;
-      box-shadow: 0 0 12px rgba(168,85,247,0.6), 0 0 0 3px rgba(168,85,247,0.15);
-      transition: box-shadow 0.2s ease;
-    }
-    .ram-slider:hover::-webkit-slider-thumb {
-      box-shadow: 0 0 20px rgba(168,85,247,0.8), 0 0 0 5px rgba(168,85,247,0.2);
-    }
-
-    /* ── Toggle ── */
-    .toggle {
-      width: 44px; height: 24px;
-      background: rgba(109,33,168,0.3);
-      border-radius: 12px;
-      position: relative; cursor: pointer;
-      border: 1px solid rgba(168,85,247,0.2);
-      transition: all 0.2s ease;
-      flex-shrink: 0;
-    }
-    .toggle.on {
-      background: rgba(168,85,247,0.4);
-      border-color: rgba(168,85,247,0.5);
-    }
-    .toggle::after {
-      content: '';
-      position: absolute; top: 2px; left: 2px;
-      width: 18px; height: 18px;
-      border-radius: 50%;
-      background: #6B21A8;
-      transition: all 0.2s ease;
-    }
-    .toggle.on::after {
-      transform: translateX(20px);
-      background: #A855F7;
-      box-shadow: 0 0 8px rgba(168,85,247,0.6);
-    }
-
-    /* ── Custom text input ── */
-    .crystal-input {
-      background: rgba(26,11,46,0.6);
-      border: 1px solid rgba(168,85,247,0.2);
-      border-radius: 10px;
-      color: #E9D5FF;
-      font-family: 'Nunito Sans', sans-serif;
-      font-size: 13px;
-      padding: 10px 14px;
-      outline: none;
-      transition: all 0.2s ease;
-      width: 100%;
-    }
-    .crystal-input:focus {
-      border-color: rgba(168,85,247,0.5);
-      box-shadow: 0 0 0 2px rgba(168,85,247,0.1);
-    }
-    .crystal-input::placeholder { color: rgba(192,132,252,0.35); }
-
-    /* ── Log ── */
-    .log-wrap {
-      font-family: 'Courier New', monospace;
-      font-size: 11px; line-height: 1.65;
-      color: rgba(192,132,252,0.6);
-    }
-    .log-info  { color: rgba(192,132,252,0.7); }
-    .log-error { color: #F87171; }
-    .log-ok    { color: #A855F7; }
-
-    /* ── Wc buttons ── */
-    .wc { width: 30px; height: 30px; border-radius: 50%; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
-
-    /* ── Social button ── */
-    .social-btn {
-      display: flex; align-items: center; gap: 8px;
-      padding: 9px 16px;
-      border-radius: 10px;
-      background: rgba(168,85,247,0.08);
-      border: 1px solid rgba(168,85,247,0.2);
-      color: #C084FC;
-      font-size: 12.5px; font-weight: 600;
-      cursor: pointer; transition: all 0.2s ease;
-    }
-    .social-btn:hover {
-      background: rgba(168,85,247,0.18);
-      border-color: rgba(168,85,247,0.4);
-      color: #E9D5FF;
-      box-shadow: 0 0 16px rgba(168,85,247,0.2);
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amethyst Launcher — Powerful Minecraft Launcher</title>
+    
+    <!-- Иконка вкладки (Favicon) -->
+    <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/devodrag/psychicmodules/refs/heads/main/IMG_20260501_193903.png">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { background-color: #0d1117; color: #ffffff; font-family: 'Inter', sans-serif; }
+        .gradient-text { background: linear-gradient(90deg, #a855f7, #6366f1); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .btn-primary { background: linear-gradient(90deg, #9333ea, #4f46e5); transition: transform 0.2s; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(147, 51, 234, 0.3); }
+        .glass-card { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 24px; }
+    </style>
 </head>
-<body class="overflow-hidden">
+<body>
 
-<!-- ═══════════════════════════════════════════════════════════════
-     AMBIENT ORBS
-════════════════════════════════════════════════════════════════ -->
-<div class="orb w-96 h-96 bg-violet-700" style="top:-10%;left:-5%;animation-delay:0s;"></div>
-<div class="orb w-80 h-80 bg-purple-600" style="bottom:-5%;right:-5%;animation-delay:-7s;opacity:.25;"></div>
-<div class="orb w-64 h-64 bg-fuchsia-800" style="top:40%;right:20%;animation-delay:-14s;opacity:.15;"></div>
-
-<!-- ═══════════════════════════════════════════════════════════════
-     WINDOW — frameless shell
-════════════════════════════════════════════════════════════════ -->
-<div class="flex h-screen w-screen overflow-hidden">
-
-  <!-- ── SIDEBAR ───────────────────────────────────────────────── -->
-    <aside class="glass flex flex-col w-52 flex-shrink-0 border-r border-amethyst/10 relative z-10">
-
-    <!-- Drag titlebar -->
-    <div class="drag h-10 flex items-center px-4 gap-3 border-b border-amethyst/10 flex-shrink-0">
-      <!-- Logo -->
-      <div class="flex items-center gap-2">
-        <img
-          src="https://raw.githubusercontent.com/devodrag/psychicmodules/refs/heads/main/IMG_20260501_193903.png"
-          alt="avatar"
-          style="width:22px;height:22px;border-radius:8px;object-fit:cover;box-shadow:0 0 0 1px rgba(168,85,247,0.25);"
-        />
-        <span class="font-display font-900 text-sm tracking-widest text-mist" style="font-weight:900;letter-spacing:.18em;">AMETHYST</span>
-      </div>
-    </div>
-
-    <!-- Nav -->
-    <nav class="flex-1 flex flex-col gap-1 p-3 pt-4">
-      <button class="nav-btn active no-drag" data-page="home">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
-        Главная
-      </button>
-      <button class="nav-btn no-drag" data-page="settings">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
-        Настройки
-      </button>
+    <!-- Navbar -->
+    <nav class="flex items-center justify-between px-8 py-6 max-w-7xl mx-auto">
+        <div class="text-2xl font-bold flex items-center gap-3">
+            <img src="https://raw.githubusercontent.com/devodrag/psychicmodules/refs/heads/main/IMG_20260501_193903.png" 
+                 alt="Amethyst Logo" 
+                 class="h-9 w-9 object-contain filter drop-shadow(0 0 4px rgba(168, 85, 247, 0.6))"> 
+            <span>Amethyst</span>
+        </div>
+        <div class="hidden md:flex items-center gap-8 text-gray-400 font-medium">
+            <a href="https://github.com/devodrag/amethyst-launcher/releases/download/launcher/Amethyst-Setup-1.0.2.exe" class="hover:text-white transition">Download</a>
+            <a href="https://github.com/devodrag/amethyst-launcher" class="hover:text-white transition">GitHub</a>
+        </div>
     </nav>
 
-    <!-- Social links -->
-    <div class="p-3 border-t border-amethyst/10 flex flex-col gap-2">
-      <button class="social-btn no-drag" id="btn-modrinth">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12.006 0a12 12 0 100 24 12 12 0 000-24zm-.87 4.343a7.613 7.613 0 016.498 3.641l-1.925 1.11a5.495 5.495 0 00-4.573-2.64 5.512 5.512 0 00-5.493 5.547 5.506 5.506 0 003.706 5.2l-.004 2.225a7.636 7.636 0 01-5.821-7.424 7.63 7.63 0 017.612-7.66zm1.746 3.306l2.206 3.81-2.164 1.25-.008-5.06zm2.206 4.858l2.215 1.277a7.62 7.62 0 01-5.353 8.13v-2.221a5.518 5.518 0 003.138-7.186z"/></svg>
-        Modrinth
-      </button>
-      <button class="social-btn no-drag" id="btn-curseforge">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M8.415 0S7.16 4.716 7.12 8.04c0 0-1.073-.617-1.073-2.925C3.77 6.79 2 10.01 2 13.774 2 19.444 6.507 24 12.12 24c5.613 0 10.12-4.556 10.12-10.226 0-6.168-4.898-11.006-4.898-11.006-.048 2.418-1.51 3.43-1.51 3.43C15.344 2.932 8.415 0 8.415 0z"/></svg>
-        CurseForge
-      </button>
-      <button class="social-btn no-drag" id="btn-folder">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
-        .minecraft
-      </button>
-    </div>
-
-    <!-- Version badge -->
-    <div class="px-3 pb-3">
-      <div class="text-center text-xs" style="color:rgba(168,85,247,0.35);font-weight:600;letter-spacing:.08em;">v1.0.2</div>
-    </div>
-  </aside>
-
-  <!-- ── MAIN AREA ──────────────────────────────────────────────── -->
-  <div class="flex-1 flex flex-col overflow-hidden relative">
-
-    <!-- Custom titlebar strip -->
-    <div class="drag flex items-center justify-end px-4 h-10 flex-shrink-0" style="background:rgba(15,5,29,0.6);">
-      <div class="no-drag flex items-center gap-2">
-        <button class="wc" id="wc-min" style="background:rgba(168,85,247,0.12);color:#C084FC;" title="Свернуть">
-          <svg width="10" height="2" viewBox="0 0 10 2"><rect width="10" height="2" rx="1" fill="currentColor"/></svg>
-        </button>
-        <button class="wc" id="wc-max" style="background:rgba(168,85,247,0.12);color:#C084FC;" title="Развернуть">
-          <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
-        </button>
-        <button class="wc" id="wc-close" style="background:rgba(239,68,68,0.12);color:#F87171;" title="Закрыть">
-          <svg width="10" height="10" viewBox="0 0 10 10"><line x1="1" y1="1" x2="9" y2="9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><line x1="9" y1="1" x2="1" y2="9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-        </button>
-      </div>
-    </div>
-
-    <!-- Pages container -->
-    <div class="flex-1 overflow-hidden">
-
-      <!-- ══════════════════════════════════
-           HOME PAGE
-      ═══════════════════════════════════ -->
-      <section class="page active" id="page-home" style="overflow:auto;">
-        <div class="flex h-full gap-4 p-5" style="min-height:0;">
-
-          <!-- Left: Version selector -->
-          <div class="glass rounded-2xl flex flex-col gap-4 p-5" style="width:280px;flex-shrink:0;min-height:0;">
-            <div>
-              <div class="text-xs font-display font-700 tracking-widest mb-3" style="color:rgba(168,85,247,0.5);">ТИП ЗАГРУЗЧИКА</div>
-              <div class="flex gap-2" id="loader-tabs">
-                <button class="loader-btn active" data-loader="vanilla">
-                  <span class="loader-icon">🌿</span>Vanilla
-                </button>
-                <button class="loader-btn" data-loader="fabric">
-                  <span class="loader-icon">🧵</span>Fabric
-                </button>
-                <button class="loader-btn" data-loader="forge">
-                  <span class="loader-icon">🔥</span>Forge
-                </button>
-              </div>
-              <div class="flex gap-2 mt-2">
-                <button class="loader-btn" data-loader="neoforge">
-                  <span class="loader-icon">⚙️</span>NeoForge
-                </button>
-                <button class="loader-btn" data-loader="quilt">
-                  <span class="loader-icon">🪡</span>Quilt
-                </button>
-                <div class="flex-1"></div>
-              </div>
-            </div>
-
-            <div>
-              <div class="flex items-center justify-between mb-2">
-                <div class="text-xs font-display font-700 tracking-widest" style="color:rgba(168,85,247,0.5);">ВЕРСИЯ</div>
-                <div id="filter-tags" class="flex gap-1">
-                  <button class="text-xs px-2 py-0.5 rounded-full font-600" id="tag-release"
-                    style="background:rgba(168,85,247,0.2);color:#A855F7;border:1px solid rgba(168,85,247,0.3);">Release</button>
-                  <button class="text-xs px-2 py-0.5 rounded-full font-600" id="tag-snapshot"
-                    style="background:rgba(42,18,69,0.5);color:#6B7280;border:1px solid rgba(109,33,168,0.2);">Snapshot</button>
-                </div>
-              </div>
-
-              <!-- Version list -->
-            <div class="glass-bright rounded-xl p-2 version-list" id="version-list">
-                <div class="text-center py-6 text-xs" style="color:rgba(168,85,247,0.4);">
-                  <div class="animate-spin-slow inline-block text-2xl mb-2">◈</div>
-                  <div>Загрузка версий...</div>
-                </div>
-              </div>
-
-              <!-- Loader note -->
-              <div id="loader-note" class="mt-2 text-xs px-2 hidden" style="color:rgba(192,132,252,0.45);">
-                Установите загрузчик вручную в папке игры. Лаунчер запустит нужный профиль.
-              </div>
-            </div>
-
-            <!-- Selected version display -->
-            <div class="mt-auto glass rounded-xl px-4 py-3 flex items-center gap-3">
-              <div class="w-2 h-2 rounded-full bg-amethyst flex-shrink-0" style="box-shadow:0 0 6px #A855F7;"></div>
-              <div>
-                <div class="text-xs" style="color:rgba(192,132,252,0.5);font-weight:600;">Выбрано</div>
-                <div class="text-sm font-display font-700 text-mist" id="selected-display">—</div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Right: main area -->
-          <div class="flex-1 flex flex-col gap-4" style="min-height:0;">
-
-            <!-- Status header -->
-            <div class="glass rounded-2xl px-5 py-4 flex items-center justify-between">
-              <div>
-                <div class="font-display font-800 text-lg text-mist tracking-tight">Готово к запуску</div>
-                <div class="text-xs mt-0.5" style="color:rgba(192,132,252,0.5);" id="status-sub">Выберите версию и нажмите ЗАПУСК</div>
-              </div>
-              <div class="flex items-center gap-2">
-                <div class="w-2 h-2 rounded-full" id="status-dot" style="background:#6B21A8;box-shadow:0 0 6px #6B21A8;"></div>
-                <span class="text-xs font-600" style="color:#6B21A8;" id="status-label">Ожидание</span>
-              </div>
-            </div>
-
-            <!-- Log console -->
-            <div class="glass rounded-2xl flex-1 flex flex-col overflow-hidden" style="min-height:0;">
-              <div class="flex items-center justify-between px-4 py-2.5 border-b" style="border-color:rgba(168,85,247,0.1);flex-shrink:0;">
-                <span class="text-xs font-display font-700 tracking-widest" style="color:rgba(168,85,247,0.4);">КОНСОЛЬ</span>
-                <button id="btn-log-clear" class="text-xs px-3 py-1 rounded-lg transition-all" style="color:rgba(192,132,252,0.4);background:rgba(168,85,247,0.07);">Очистить</button>
-              </div>
-              <div class="flex-1 overflow-y-auto p-4 log-wrap" id="log-body">
-                <div class="log-ok">◈ Amethyst Launcher инициализирован</div>
-              </div>
-            </div>
-
-            <!-- Launch button -->
-            <div class="flex items-center gap-4">
-              <div class="relative flex-1">
-                <div class="launch-btn-pulse"></div>
-                <button class="launch-btn w-full py-4 relative" id="btn-launch">
-                  <span class="relative z-10 flex items-center justify-center gap-3">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
-                    ЗАПУСК
-                  </span>
-                </button>
-              </div>
-
-              <!-- Username input -->
-              <div style="width:180px;">
-                <div class="text-xs font-600 mb-1.5" style="color:rgba(192,132,252,0.4);letter-spacing:.06em;">НИКНЕЙМ</div>
-                <input class="crystal-input" id="username-input" placeholder="Player" value="Player"/>
-              </div>
-            </div>
-
-          </div>
+    <!-- Hero Section -->
+    <section class="max-w-5xl mx-auto pt-20 pb-32 text-center px-4">
+        <h1 class="text-6xl md:text-8xl font-black mb-6 tracking-tight">
+            The next gen <br><span class="gradient-text">Minecraft Launcher</span>
+        </h1>
+        <p class="text-gray-400 text-xl mb-10 max-w-2xl mx-auto leading-relaxed">
+            Amethyst — это быстрый, современный и мощный лаунчер, созданный для комфортной игры и простой работы с модами.
+        </p>
+        
+        <div class="flex flex-col md:flex-row items-center justify-center gap-4">
+            <a href="https://github.com/devodrag/amethyst-launcher/releases/download/launcher/Amethyst-Setup-1.0.2.exe" class="btn-primary px-10 py-4 rounded-full font-bold text-lg flex items-center gap-2">
+                <i class="fab fa-windows"></i> Download for Windows
+            </a>
+            <a href="https://github.com/devodrag/amethyst-launcher" class="bg-white/10 hover:bg-white/20 px-10 py-4 rounded-full font-bold text-lg transition">
+                GitHub Repository
+            </a>
         </div>
-      </section>
-
-      <!-- ══════════════════════════════════
-           SETTINGS PAGE
-      ═══════════════════════════════════ -->
-      <section class="page" id="page-settings">
-        <div class="flex flex-col gap-5 p-5 overflow-y-auto h-full">
-
-          <div>
-            <h1 class="font-display font-900 text-2xl text-mist tracking-tight">Настройки</h1>
-            <p class="text-sm mt-1" style="color:rgba(192,132,252,0.45);">Конфигурация лаунчера Amethyst</p>
-          </div>
-
-          <div class="grid grid-cols-2 gap-4">
-
-            <!-- RAM card -->
-            <div class="glass rounded-2xl p-5 flex flex-col gap-4">
-              <div class="flex items-center gap-2">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A855F7" stroke-width="2"><rect x="2" y="8" width="20" height="8" rx="2"/><path d="M6 8V6m4 2V6m4 2V6m4 2V6M6 16v2m4-2v2m4-2v2m4-2v2"/></svg>
-                <span class="font-display font-700 text-sm text-mist">Оперативная память</span>
-              </div>
-              <div class="flex items-baseline gap-2">
-                <span class="font-display font-900 text-5xl" style="color:#A855F7;" id="ram-value">2</span>
-                <span class="text-lg font-600" style="color:rgba(192,132,252,0.6);">ГБ</span>
-              </div>
-              <input type="range" class="ram-slider" id="ram-slider" min="2" max="16" value="2" step="1"/>
-              <div class="flex justify-between text-xs" style="color:rgba(168,85,247,0.4);font-weight:600;">
-                <span>2 ГБ</span>
-                <span id="ram-max-label">16 ГБ</span>
-              </div>
-            </div>
-
-            <!-- Display card -->
-            <div class="glass rounded-2xl p-5 flex flex-col gap-4">
-              <div class="flex items-center gap-2">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A855F7" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/></svg>
-                <span class="font-display font-700 text-sm text-mist">Дисплей</span>
-              </div>
-
-              <!-- Fullscreen toggle -->
-              <div class="flex items-center justify-between">
-                <span class="text-sm" style="color:#C084FC;">Полноэкранный режим</span>
-                <div class="toggle" id="toggle-fullscreen"></div>
-              </div>
-
-              <div id="resolution-block" class="flex flex-col gap-3">
-                <div class="flex items-center gap-3">
-                  <div class="flex-1">
-                    <div class="text-xs mb-1 font-600" style="color:rgba(192,132,252,0.4);">ШИРИНА</div>
-                    <input class="crystal-input" type="number" id="res-w" value="1280" placeholder="1280"/>
-                  </div>
-                  <span class="text-lg" style="color:rgba(168,85,247,0.4);margin-top:18px;">×</span>
-                  <div class="flex-1">
-                    <div class="text-xs mb-1 font-600" style="color:rgba(192,132,252,0.4);">ВЫСОТА</div>
-                    <input class="crystal-input" type="number" id="res-h" value="720" placeholder="720"/>
-                  </div>
-                </div>
-                <div class="flex gap-2">
-                  <button class="preset-btn text-xs px-3 py-1.5 rounded-lg font-600 transition-all" data-w="1280" data-h="720"
-                    style="background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.2);color:#C084FC;">720p</button>
-                  <button class="preset-btn text-xs px-3 py-1.5 rounded-lg font-600 transition-all" data-w="1920" data-h="1080"
-                    style="background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.2);color:#C084FC;">1080p</button>
-                  <button class="preset-btn text-xs px-3 py-1.5 rounded-lg font-600 transition-all" data-w="2560" data-h="1440"
-                    style="background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.2);color:#C084FC;">1440p</button>
-                </div>
-              </div>
-            </div>
-
-            <!-- JVM args -->
-            <div class="glass rounded-2xl p-5 flex flex-col gap-3 col-span-2">
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-2">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A855F7" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-                  <span class="font-display font-700 text-sm text-mist">Аргументы JVM</span>
-                </div>
-                <div class="toggle" id="toggle-jvm"></div>
-              </div>
-              <div id="jvm-block">
-                <input class="crystal-input" id="jvm-args"
-                  placeholder="-XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200"
-                  value="-XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200"/>
-                <p class="text-xs mt-2" style="color:rgba(168,85,247,0.35);line-height:1.5;">Разделяйте аргументы пробелом. Неверные значения могут помешать запуску.</p>
-              </div>
-            </div>
-
-            <!-- Save button -->
-            <div class="col-span-2 flex items-center justify-between glass rounded-2xl p-5">
-              <div id="save-toast" class="text-sm font-600 opacity-0 transition-opacity" style="color:#A855F7;">
-                ✦ Настройки сохранены
-              </div>
-              <button id="btn-save" class="flex items-center gap-2 px-6 py-3 rounded-xl font-display font-700 text-sm transition-all"
-                style="background:linear-gradient(135deg,#7C3AED,#A855F7);color:#fff;">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>
-                Сохранить
-              </button>
-            </div>
-          </div>
+        
+        <div class="mt-12 flex items-center justify-center gap-2 text-sm text-gray-500 uppercase tracking-widest font-semibold">
+            <span>Supports</span>
+            <span class="text-emerald-500">Modrinth</span>
         </div>
-      </section>
+    </section>
 
-    </div><!-- /pages -->
-  </div><!-- /main area -->
-</div>
+    <!-- Features Section -->
+    <section class="max-w-7xl mx-auto px-4 py-20 border-t border-white/5">
+        <div class="grid md:grid-cols-1 gap-8">
+            <div class="glass-card p-12 flex flex-col md:flex-row items-center gap-12">
+                <div class="flex-1 text-left">
+                    <h2 class="text-4xl font-bold mb-6">Install mods directly from the launcher</h2>
+                    <p class="text-gray-400 text-lg mb-6">
+                        Больше никаких мучений с папками `.minecraft`. Ищите, устанавливайте и обновляйте моды с Modrinth в пару кликов. Amethyst берет всю рутину на себя.
+                    </p>
+                    <ul class="space-y-4 text-gray-300">
+                        <li class="flex items-center gap-3"><i class="fas fa-check text-purple-500"></i> Прямая интеграция с Modrinth API</li>
+                        <li class="flex items-center gap-3"><i class="fas fa-check text-purple-500"></i> Автоматическая установка зависимостей</li>
+                        <li class="flex items-center gap-3"><i class="fas fa-check text-purple-500"></i> Быстрая загрузка и оптимизация</li>
+                    </ul>
+                </div>
+                <div class="flex-1 bg-gradient-to-br from-purple-900/20 to-blue-900/20 w-full h-64 rounded-2xl border border-white/10 flex items-center justify-center">
+                    <i class="fas fa-cubes text-7xl text-purple-500/50"></i>
+                </div>
+            </div>
+        </div>
+    </section>
 
-<!-- ═══════════════════════════════════════════════════════════════
-     MODRINTH MODAL (search → select mod → select version)
-════════════════════════════════════════════════════════════════ -->
-<div id="mr-modal" class="hidden no-drag" style="position:fixed;inset:0;z-index:10000;">
-  <div style="position:absolute;inset:0;background:rgba(15,5,29,0.82);backdrop-filter:blur(10px);"></div>
-  <div class="glass rounded-2xl" style="position:relative;max-width:860px;width:92vw;max-height:80vh;margin:8vh auto;display:flex;flex-direction:column;overflow:hidden;">
-    <div class="flex items-center justify-between px-5 py-3 border-b" style="border-color:rgba(168,85,247,0.12);">
-      <div class="flex items-center gap-2">
-        <div class="font-display font-900 text-mist">Modrinth</div>
-        <div class="text-xs" style="color:rgba(192,132,252,0.5);">поиск и установка модов</div>
-      </div>
-      <button id="mr-close" class="wc" style="width:32px;height:32px;background:rgba(239,68,68,0.12);color:#F87171;" title="Закрыть">
-        <svg width="10" height="10" viewBox="0 0 10 10"><line x1="1" y1="1" x2="9" y2="9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><line x1="9" y1="1" x2="1" y2="9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-      </button>
-    </div>
+    <!-- Footer -->
+    <footer class="max-w-7xl mx-auto px-8 py-20 border-t border-white/5">
+        <div class="flex flex-col md:flex-row justify-between items-center gap-8">
+            <div>
+                <div class="text-xl font-bold mb-4">Amethyst Launcher</div>
+                <p class="text-gray-500 text-sm">Created with passion for the Minecraft community.</p>
+            </div>
+            <div class="flex gap-10">
+                <div class="flex flex-col gap-3">
+                    <span class="text-white font-semibold">Project</span>
+                    <a href="https://github.com/devodrag/amethyst-launcher/releases" class="text-gray-500 hover:text-white transition text-sm">Releases</a>
+                    <a href="https://github.com/devodrag/amethyst-launcher" class="text-gray-500 hover:text-white transition text-sm">Source Code</a>
+                </div>
+                <div class="flex flex-col gap-3">
+                    <span class="text-white font-semibold">Community</span>
+                    <a href="#" class="text-gray-500 hover:text-white transition text-sm">Modrinth</a>
+                    <a href="https://x.com/devodrag" class="text-gray-500 hover:text-white transition text-sm">Developer X</a>
+                </div>
+            </div>
+        </div>
+        <div class="mt-20 pt-8 border-t border-white/5 text-center text-gray-600 text-xs">
+            &copy; 2026 Amethyst Launcher. Minecraft is a trademark of Mojang Synergies AB. Not an official Minecraft product.
+        </div>
+    </footer>
 
-    <div class="px-5 py-4 flex items-center gap-3">
-      <input class="crystal-input" id="mr-query" placeholder="Название мода (например: sodium, iris, worldedit)"/>
-      <button id="mr-search" class="social-btn" style="padding:10px 14px;white-space:nowrap;">Искать</button>
-    </div>
-
-    <div class="px-5 pb-4 grid grid-cols-2 gap-4" style="min-height:0;flex:1;">
-      <div class="glass-bright rounded-xl p-2" style="min-height:0;overflow:auto;">
-        <div class="text-xs font-display font-700 tracking-widest px-2 py-2" style="color:rgba(168,85,247,0.45);">РЕЗУЛЬТАТЫ</div>
-        <div id="mr-results" style="display:flex;flex-direction:column;gap:6px;padding:6px;"></div>
-      </div>
-      <div class="glass-bright rounded-xl p-2" style="min-height:0;overflow:auto;">
-        <div class="text-xs font-display font-700 tracking-widest px-2 py-2" style="color:rgba(168,85,247,0.45);">ВЕРСИИ</div>
-        <div id="mr-versions" style="display:flex;flex-direction:column;gap:6px;padding:6px;"></div>
-      </div>
-    </div>
-
-    <div class="px-5 py-3 border-t flex items-center justify-between" style="border-color:rgba(168,85,247,0.12);">
-      <div id="mr-status" class="text-xs" style="color:rgba(192,132,252,0.55);">—</div>
-      <div class="text-xs" style="color:rgba(192,132,252,0.35);">Файлы ставятся в <b>/mods</b> папки игры</div>
-    </div>
-  </div>
-</div>
-
-<script src="renderer.js"></script>
 </body>
 </html>
