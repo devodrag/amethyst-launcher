@@ -1,0 +1,43 @@
+{
+  "name": "amethyst-launcher",
+  "version": "1.0.2",
+  "description": "Amethyst — Minecraft Launcher",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "prebuild:win": "node scripts/make-ico.js",
+    "build:win":   "npm run prebuild:win && electron-builder --win",
+    "build:linux": "electron-builder --linux",
+    "build:mac":   "electron-builder --mac"
+  },
+  "dependencies": {
+    "minecraft-launcher-core": "^3.5.2",
+    "prismarine-nbt": "^2.4.0",
+    "msmc": "^3.1.5"
+  },
+  "devDependencies": {
+    "electron": "^29.0.0",
+    "electron-builder": "^24.0.0",
+    "png-to-ico": "^2.1.8"
+  },
+  "build": {
+    "appId": "pw.godbox.amethyst",
+    "productName": "Amethyst Launcher",
+    "directories": { "output": "dist" },
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "assets/icon.ico",
+      "artifactName": "Amethyst-Setup-${version}.${ext}"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "assets/icon.png"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.icns"
+    }
+  },
+  "author": "GodBox",
+  "license": "MIT"
+}
