@@ -7,16 +7,18 @@
 
 // ─── State ──────────────────────────────────────────────────────────────────
 const state = {
-  versions:        [],      // raw manifest versions
+  versions:        [],
   filteredVersions:[],
   selectedVersion: null,
+  /** 'release' | 'snapshot' — для MCLC */
+  selectedVersionType: 'release',
   selectedLoader:  'vanilla',
   showSnapshots:   false,
   launching:       false,
   fullscreen:      false,
   jvmEnabled:      true,
-  authMode:        'pirate', // 'pirate' | 'microsoft'
-  msAccountName:   null,
+  accountType:     null,   // 'offline' | 'microsoft'
+  msUsername:      null,
 };
 
 // ─── DOM helpers ────────────────────────────────────────────────────────────
@@ -48,324 +50,22 @@ function initWindowControls() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  MODULE: First launch auth choice + Microsoft
-// ═══════════════════════════════════════════════════════════════════════════
-async function initAuth() {
-  const saved = localStorage.getItem('am_auth_mode');
-  if (!saved) {
-    await showFirstLaunchChoice();
-  } else {
-    state.authMode = saved;
-  }
-
-  // Insert small MS controls near nickname input (minimal UI changes)
-  const wrap = $('username-input')?.parentElement;
-  if (wrap && !document.getElementById('ms-controls')) {
-    const div = document.createElement('div');
-    div.id = 'ms-controls';
-    div.className = 'mt-2 flex items-center gap-2';
-    div.innerHTML = `
-      <button class="social-btn no-drag" id="btn-ms-login" style="padding:8px 12px;">
-        Microsoft вход
-      </button>
-      <button class="social-btn no-drag" id="btn-ms-logout" style="padding:8px 12px;opacity:.7;">
-        Выйти
-      </button>
-      <div id="ms-status" class="text-xs" style="color:rgba(192,132,252,0.55);font-weight:600;"></div>
-    `;
-    wrap.appendChild(div);
-
-    $('btn-ms-login').addEventListener('click', async () => {
-      log('◈ Открываем вход Microsoft...', 'info');
-      const r = await amethyst.msLogin();
-      if (!r.success) {
-        log('✖ Microsoft: ' + (r.error || 'ошибка входа'), 'error');
-        return;
-      }
-      state.authMode = 'microsoft';
-      localStorage.setItem('am_auth_mode', 'microsoft');
-      await refreshMsStatus();
-      applyAuthModeToUI();
-      log(`✦ Microsoft: вошли как ${state.msAccountName || 'аккаунт'}`, 'ok');
-    });
-
-    $('btn-ms-logout').addEventListener('click', async () => {
-      await amethyst.msLogout();
-      state.msAccountName = null;
-      if (state.authMode === 'microsoft') {
-        state.authMode = 'pirate';
-        localStorage.setItem('am_auth_mode', 'pirate');
-      }
-      await refreshMsStatus();
-      applyAuthModeToUI();
-      log('◈ Microsoft: выход выполнен', 'info');
-    });
-  }
-
-  await refreshMsStatus();
-  applyAuthModeToUI();
-}
-
-async function refreshMsStatus() {
-  const st = await amethyst.msStatus();
-  const el = document.getElementById('ms-status');
-  if (!el) return;
-  if (!st?.loggedIn) {
-    el.textContent = 'MS: не подключен';
-    state.msAccountName = null;
-    return;
-  }
-  state.msAccountName = st.name || 'Аккаунт';
-  el.textContent = `MS: ${state.msAccountName}${st.valid ? '' : ' (нужно войти заново)'}`;
-}
-
-function applyAuthModeToUI() {
-  const u = $('username-input');
-  const hint = u?.parentElement?.querySelector('.am-auth-hint');
-  if (hint) hint.remove();
-
-  if (!u) return;
-  if (state.authMode === 'microsoft') {
-    u.disabled = true;
-    u.style.opacity = '.45';
-    u.value = state.msAccountName || u.value;
-    const p = document.createElement('div');
-    p.className = 'am-auth-hint text-xs mt-1';
-    p.style.color = 'rgba(192,132,252,0.45)';
-    p.textContent = 'Microsoft режим: ник берётся из аккаунта, servers.dat не добавляется.';
-    u.parentElement.appendChild(p);
-  } else {
-    u.disabled = false;
-    u.style.opacity = '1';
-    const p = document.createElement('div');
-    p.className = 'am-auth-hint text-xs mt-1';
-    p.style.color = 'rgba(192,132,252,0.45)';
-    p.textContent = 'Пиратский режим: servers.dat будет обновлён (godbox.pw).';
-    u.parentElement.appendChild(p);
-  }
-}
-
-function showFirstLaunchChoice() {
-  return new Promise((resolve) => {
-    const overlay = document.createElement('div');
-    overlay.id = 'first-launch-overlay';
-    overlay.style.position = 'fixed';
-    overlay.style.inset = '0';
-    overlay.style.background = 'rgba(15,5,29,0.82)';
-    overlay.style.backdropFilter = 'blur(10px)';
-    overlay.style.zIndex = '9999';
-    overlay.style.display = 'flex';
-    overlay.style.alignItems = 'center';
-    overlay.style.justifyContent = 'center';
-
-    overlay.innerHTML = `
-      <div class="glass rounded-2xl p-6" style="width:520px;max-width:92vw;">
-        <div class="font-display font-900 text-xl text-mist tracking-tight">Первый запуск</div>
-        <div class="text-sm mt-1" style="color:rgba(192,132,252,0.55);">
-          Выберите тип входа. Можно сменить позже кнопками рядом с никнеймом.
-        </div>
-        <div class="mt-5 grid grid-cols-2 gap-3">
-          <button class="launch-btn py-3" id="choice-pirate" style="font-size:13px;letter-spacing:.12em;">
-            <span class="relative z-10">ПИРАТСКАЯ</span>
-          </button>
-          <button class="launch-btn py-3" id="choice-ms" style="font-size:13px;letter-spacing:.12em;animation:none;background:linear-gradient(135deg,#2A1245,#A855F7);">
-            <span class="relative z-10">MICROSOFT</span>
-          </button>
-        </div>
-        <div class="text-xs mt-4" style="color:rgba(192,132,252,0.45);line-height:1.6;">
-          Пиратка: автоматически добавляем сервера <b>godbox.pw</b>.<br/>
-          Microsoft: сервера не добавляем.
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(overlay);
-    overlay.querySelector('#choice-pirate').addEventListener('click', () => {
-      state.authMode = 'pirate';
-      localStorage.setItem('am_auth_mode', 'pirate');
-      overlay.remove();
-      resolve();
-    });
-    overlay.querySelector('#choice-ms').addEventListener('click', async () => {
-      state.authMode = 'microsoft';
-      localStorage.setItem('am_auth_mode', 'microsoft');
-      overlay.remove();
-      resolve();
-      // вход не форсим сразу, чтобы не было неожиданного окна; кнопка рядом
-    });
-  });
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
 //  MODULE: Shell links
 // ═══════════════════════════════════════════════════════════════════════════
 function initShellLinks() {
-  $('btn-modrinth').addEventListener('click',   () => openModrinthModal());
+  $('btn-modrinth').addEventListener('click', openModSearch);
   $('btn-curseforge').addEventListener('click', () => amethyst.openExternal('https://www.curseforge.com'));
-  $('btn-folder').addEventListener('click',     () => amethyst.openFolder());
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-//  MODULE: Modrinth modal
-// ═══════════════════════════════════════════════════════════════════════════
-let mrSelectedProjectId = null;
-
-function openModrinthModal() {
-  const modal = document.getElementById('mr-modal');
-  if (!modal) return;
-  modal.classList.remove('hidden');
-  document.getElementById('mr-query')?.focus();
-
-  // wire once
-  if (!modal.dataset.wired) {
-    modal.dataset.wired = '1';
-    document.getElementById('mr-close')?.addEventListener('click', closeModrinthModal);
-    document.getElementById('mr-search')?.addEventListener('click', () => doModrinthSearch());
-    document.getElementById('mr-query')?.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') doModrinthSearch();
-      if (e.key === 'Escape') closeModrinthModal();
+  $('btn-folder').addEventListener('click', async () => {
+    if (!state.selectedVersion) {
+      amethyst.openFolder();
+      return;
+    }
+    const { path: p } = await amethyst.getInstancePath({
+      version: state.selectedVersion,
+      loader: state.selectedLoader,
     });
-    // click outside closes
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) closeModrinthModal();
-    });
-  }
-}
-
-function closeModrinthModal() {
-  const modal = document.getElementById('mr-modal');
-  if (!modal) return;
-  modal.classList.add('hidden');
-}
-
-function mrSetStatus(t) {
-  const el = document.getElementById('mr-status');
-  if (el) el.textContent = t || '—';
-}
-
-async function doModrinthSearch() {
-  const q = (document.getElementById('mr-query')?.value || '').trim();
-  const resultsEl = document.getElementById('mr-results');
-  const versionsEl = document.getElementById('mr-versions');
-  if (resultsEl) resultsEl.innerHTML = '';
-  if (versionsEl) versionsEl.innerHTML = '';
-  mrSelectedProjectId = null;
-
-  if (!q) {
-    mrSetStatus('Введите название мода.');
-    return;
-  }
-
-  mrSetStatus('Ищем...');
-  const res = await amethyst.modrinthSearch(q);
-  if (!res?.success) {
-    mrSetStatus('Ошибка: ' + (res?.error || 'unknown'));
-    return;
-  }
-
-  const hits = res.hits || [];
-  mrSetStatus(`Найдено: ${hits.length}`);
-  if (!resultsEl) return;
-
-  if (hits.length === 0) {
-    resultsEl.innerHTML = `<div class="text-xs px-2 py-2" style="color:rgba(192,132,252,0.5);">Ничего не найдено</div>`;
-    return;
-  }
-
-  hits.forEach(h => {
-    const row = document.createElement('button');
-    row.className = 'version-item';
-    row.style.textAlign = 'left';
-    row.style.width = '100%';
-    row.innerHTML = `
-      <div style="display:flex;gap:10px;align-items:center;width:100%;">
-        ${h.icon_url ? `<img src="${h.icon_url}" style="width:28px;height:28px;border-radius:8px;object-fit:cover;box-shadow:0 0 0 1px rgba(168,85,247,0.18);" />` : `<div style="width:28px;height:28px;border-radius:8px;background:rgba(168,85,247,0.12);"></div>`}
-        <div style="display:flex;flex-direction:column;min-width:0;">
-          <div style="font-weight:800;color:#E9D5FF;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(h.title || h.slug)}</div>
-          <div style="font-size:11px;color:rgba(192,132,252,0.5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(h.description || '')}</div>
-        </div>
-        <div style="margin-left:auto;font-size:10px;opacity:.5;">${(h.downloads || 0).toLocaleString()} dl</div>
-      </div>
-    `;
-    row.addEventListener('click', async () => {
-      mrSelectedProjectId = h.id;
-      $$('#mr-results .version-item').forEach(x => x.classList.remove('selected'));
-      row.classList.add('selected');
-      await loadModrinthVersions(h.id);
-    });
-    resultsEl.appendChild(row);
+    amethyst.openFolder(p);
   });
-}
-
-async function loadModrinthVersions(projectId) {
-  const versionsEl = document.getElementById('mr-versions');
-  if (!versionsEl) return;
-  versionsEl.innerHTML = '';
-  mrSetStatus('Загружаем версии...');
-
-  const res = await amethyst.modrinthVersions(projectId);
-  if (!res?.success) {
-    mrSetStatus('Ошибка: ' + (res?.error || 'unknown'));
-    return;
-  }
-
-  const versions = (res.versions || []).slice().sort((a, b) => {
-    const da = Date.parse(a.date_published || '') || 0;
-    const db = Date.parse(b.date_published || '') || 0;
-    return db - da;
-  });
-
-  mrSetStatus(`Версий: ${versions.length}`);
-  if (versions.length === 0) {
-    versionsEl.innerHTML = `<div class="text-xs px-2 py-2" style="color:rgba(192,132,252,0.5);">Нет версий</div>`;
-    return;
-  }
-
-  versions.forEach(v => {
-    const file = (v.files || []).find(f => f.primary) || (v.files || [])[0];
-    const row = document.createElement('button');
-    row.className = 'version-item';
-    row.style.textAlign = 'left';
-    row.style.width = '100%';
-    const gv = Array.isArray(v.game_versions) ? v.game_versions.slice(0, 4).join(', ') : '';
-    const ld = Array.isArray(v.loaders) ? v.loaders.slice(0, 3).join(', ') : '';
-    row.innerHTML = `
-      <div style="display:flex;flex-direction:column;gap:2px;width:100%;">
-        <div style="display:flex;gap:8px;align-items:center;">
-          <span style="font-weight:800;color:#E9D5FF;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(v.name || v.version_number || v.id)}</span>
-          <span style="margin-left:auto;font-size:10px;opacity:.55;">${escapeHtml(v.version_number || '')}</span>
-        </div>
-        <div style="font-size:11px;color:rgba(192,132,252,0.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-          ${escapeHtml(gv)}${ld ? ' • ' + escapeHtml(ld) : ''}${file?.filename ? ' • ' + escapeHtml(file.filename) : ''}
-        </div>
-      </div>
-    `;
-    row.addEventListener('click', async () => {
-      if (!file?.url) {
-        mrSetStatus('У этой версии нет файла.');
-        return;
-      }
-      mrSetStatus('Скачиваем...');
-      const dl = await amethyst.modrinthDownloadVersion({ fileUrl: file.url, filename: file.filename });
-      if (!dl?.success) {
-        mrSetStatus('Ошибка: ' + (dl?.error || 'unknown'));
-        log('✖ Modrinth: ' + (dl?.error || 'unknown'), 'error');
-        return;
-      }
-      mrSetStatus(`Готово: ${dl.file}`);
-      log(`✦ Modrinth: установлен ${dl.file}`, 'ok');
-    });
-    versionsEl.appendChild(row);
-  });
-}
-
-function escapeHtml(s) {
-  return String(s || '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -450,6 +150,8 @@ function renderVersionListFallback() {
 
 function selectVersion(id) {
   state.selectedVersion = id;
+  const meta = state.versions.find((v) => v.id === id);
+  state.selectedVersionType = meta?.type === 'snapshot' ? 'snapshot' : 'release';
   $('selected-display').textContent = `${state.selectedLoader !== 'vanilla' ? state.selectedLoader + ' ' : ''}${id}`;
   renderVersionList();
 }
@@ -541,7 +243,6 @@ async function initSettings() {
     toast.style.opacity = '1';
     setTimeout(() => { toast.style.opacity = '0'; }, 2500);
   });
-
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -572,18 +273,22 @@ async function handleLaunch() {
   log(`◈ Запуск ${state.selectedLoader} ${state.selectedVersion}...`, 'ok');
 
   const config = {
-    version:   state.selectedVersion,
-    username:  $('username-input').value.trim() || 'Player',
-    authMode:  state.authMode || (localStorage.getItem('am_auth_mode') || 'pirate'),
-    ram:       localStorage.getItem('am_ram') || '2',
-    jvmArgs:   state.jvmEnabled ? ($('jvm-args').value || localStorage.getItem('am_jvm_args') || '') : '',
-    fullscreen: state.fullscreen,
-    width:     $('res-w').value,
-    height:    $('res-h').value,
+    version:     state.selectedVersion,
+    versionType: state.selectedVersionType || 'release',
+    loader:      state.selectedLoader || 'vanilla',
+    username:    state.msUsername || $('username-input').value.trim() || 'Player',
+    accountType: state.accountType || 'offline',
+    ram:         localStorage.getItem('am_ram') || '2',
+    jvmArgs:     state.jvmEnabled ? ($('jvm-args').value || localStorage.getItem('am_jvm_args') || '') : '',
+    fullscreen:  state.fullscreen,
+    width:       $('res-w').value,
+    height:      $('res-h').value,
   };
 
   log(`  Никнейм: ${config.username} | RAM: ${config.ram}G`, 'info');
-  log('  Проверка servers.dat...', 'info');
+  const inst = await amethyst.getInstancePath({ version: config.version, loader: config.loader });
+  log(`  Папка инстанса: ${inst.path}`, 'info');
+  if (config.accountType === 'offline') log('  Проверка servers.dat...', 'info');
 
   const result = await amethyst.launchGame(config);
 
@@ -659,4 +364,366 @@ initShellLinks();
 initVersions();
 initSettings();
 initLaunch();
-initAuth();
+initTgPopup();
+initAccountChooser();
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  MODULE: Account chooser (пиратка или лицензия — один раз, сохраняется)
+// ═══════════════════════════════════════════════════════════════════════════
+async function initAccountChooser() {
+  // Если уже выбрано — восстанавливаем
+  const saved = await amethyst.storeGet('account-type');
+  if (saved === 'offline') { state.accountType = 'offline'; updateAccountBadge(); return; }
+  if (saved === 'microsoft') {
+    const status = await amethyst.authMsStatus();
+    if (status.loggedIn) { state.accountType = 'microsoft'; state.msUsername = status.username; updateAccountBadge(); return; }
+  }
+  // Иначе показываем менюшку
+  showAccountChooser();
+}
+
+function showAccountChooser() {
+  const overlay = document.createElement('div');
+  overlay.id = 'acc-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(15,5,29,0.88);backdrop-filter:blur(8px);';
+  overlay.innerHTML = `
+    <div style="background:linear-gradient(145deg,#1a0b2e,#200d38);border:1px solid rgba(168,85,247,0.3);border-radius:20px;padding:40px;width:380px;text-align:center;font-family:'Montserrat',sans-serif;box-shadow:0 0 80px rgba(168,85,247,0.2);">
+      <div style="font-size:40px;margin-bottom:14px;">🎮</div>
+      <div style="font-size:20px;font-weight:800;color:#e9d5ff;margin-bottom:8px;">Выберите тип аккаунта</div>
+      <div style="font-size:13px;color:rgba(192,132,252,0.6);margin-bottom:28px;line-height:1.6;">Это можно будет изменить в настройках</div>
+
+      <button id="acc-offline" style="width:100%;padding:14px;margin-bottom:10px;background:rgba(168,85,247,0.12);border:1px solid rgba(168,85,247,0.3);border-radius:12px;color:#e9d5ff;font-family:'Montserrat',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;">
+        🏴‍☠️ Пиратская версия
+        <div style="font-size:11px;font-weight:400;color:rgba(192,132,252,0.5);margin-top:3px;">Играть оффлайн с любым никнеймом</div>
+      </button>
+
+      <button id="acc-ms" style="width:100%;padding:14px;background:linear-gradient(135deg,#7c3aed,#a855f7);border:none;border-radius:12px;color:#fff;font-family:'Montserrat',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;">
+        🪟 Лицензия Microsoft
+        <div style="font-size:11px;font-weight:400;color:rgba(255,255,255,0.6);margin-top:3px;">Войти через аккаунт Microsoft</div>
+      </button>
+
+      <div id="acc-ms-status" style="margin-top:12px;font-size:12px;color:rgba(168,85,247,0.5);min-height:18px;"></div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const close = async (type) => {
+    overlay.style.opacity='0'; overlay.style.transition='opacity .2s';
+    setTimeout(() => overlay.remove(), 220);
+    state.accountType = type;
+    await amethyst.storeSet('account-type', type);
+    updateAccountBadge();
+  };
+
+  document.getElementById('acc-offline').addEventListener('click', () => close('offline'));
+
+  document.getElementById('acc-ms').addEventListener('click', async () => {
+    const statusEl = document.getElementById('acc-ms-status');
+    statusEl.textContent = 'Открываем окно Microsoft...';
+    const res = await amethyst.authMsLogin();
+    if (res.success) {
+      state.msUsername = res.username;
+      statusEl.style.color = '#a855f7';
+      statusEl.textContent = `✓ Вошли как ${res.username}`;
+      setTimeout(() => close('microsoft'), 800);
+    } else {
+      statusEl.style.color = '#f87171';
+      statusEl.textContent = '✖ Ошибка: ' + res.error;
+    }
+  });
+}
+
+function updateAccountBadge() {
+  // Показываем текущий аккаунт в username-input или рядом
+  const input = $('username-input');
+  if (!input) return;
+  if (state.accountType === 'microsoft' && state.msUsername) {
+    input.value = state.msUsername;
+    input.readOnly = true;
+    input.style.color = '#a855f7';
+    input.title = 'Microsoft аккаунт';
+  } else {
+    input.readOnly = false;
+    input.style.color = '';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  MODULE: Modrinth mod search & download
+// ═══════════════════════════════════════════════════════════════════════════
+function openModSearch() {
+  if (document.getElementById('mod-overlay')) return;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'mod-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9998;display:flex;align-items:center;justify-content:center;background:rgba(15,5,29,0.85);backdrop-filter:blur(8px);';
+
+  overlay.innerHTML = `
+    <div id="mod-box" style="background:linear-gradient(145deg,#1a0b2e,#200d38);border:1px solid rgba(168,85,247,0.25);border-radius:20px;width:560px;max-height:80vh;display:flex;flex-direction:column;font-family:'Montserrat',sans-serif;box-shadow:0 0 80px rgba(168,85,247,0.2);">
+
+      <!-- Header -->
+      <div style="display:flex;align-items:center;gap:10px;padding:20px 20px 14px;border-bottom:1px solid rgba(168,85,247,0.1);flex-shrink:0;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="#A855F7"><path d="M12.006 0a12 12 0 100 24 12 12 0 000-24zm-.87 4.343a7.613 7.613 0 016.498 3.641l-1.925 1.11a5.495 5.495 0 00-4.573-2.64 5.512 5.512 0 00-5.493 5.547 5.506 5.506 0 003.706 5.2l-.004 2.225a7.636 7.636 0 01-5.821-7.424 7.63 7.63 0 017.612-7.66zm1.746 3.306l2.206 3.81-2.164 1.25-.008-5.06zm2.206 4.858l2.215 1.277a7.62 7.62 0 01-5.353 8.13v-2.221a5.518 5.518 0 003.138-7.186z"/></svg>
+        <span style="font-size:16px;font-weight:800;color:#e9d5ff;flex:1;">Поиск модов — Modrinth</span>
+        <button id="mod-close" style="background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.2);border-radius:50%;width:28px;height:28px;color:#c084fc;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
+      </div>
+
+      <!-- Search input -->
+      <div style="padding:14px 20px;border-bottom:1px solid rgba(168,85,247,0.1);flex-shrink:0;display:flex;gap:8px;">
+        <input id="mod-search-input" placeholder="Введите название мода..." style="flex:1;background:rgba(26,11,46,0.7);border:1px solid rgba(168,85,247,0.25);border-radius:10px;color:#e9d5ff;font-family:'Montserrat',sans-serif;font-size:13px;padding:9px 14px;outline:none;" />
+        <button id="mod-search-btn" style="background:linear-gradient(135deg,#7c3aed,#a855f7);border:none;border-radius:10px;color:#fff;font-family:'Montserrat',sans-serif;font-size:13px;font-weight:700;padding:9px 18px;cursor:pointer;">Найти</button>
+      </div>
+
+      <!-- Results -->
+      <div id="mod-results" style="flex:1;overflow-y:auto;padding:10px 12px;min-height:120px;">
+        <div style="text-align:center;padding:40px 0;color:rgba(168,85,247,0.35);font-size:13px;">Введите название мода и нажмите «Найти»</div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  // Scrollbar style
+  const style = document.createElement('style');
+  style.id = 'mod-style';
+  style.textContent = '#mod-results::-webkit-scrollbar{width:4px}#mod-results::-webkit-scrollbar-thumb{background:#6b21a8;border-radius:2px}';
+  document.head.appendChild(style);
+
+  const closeModal = () => { overlay.remove(); document.getElementById('mod-style')?.remove(); };
+  document.getElementById('mod-close').addEventListener('click', closeModal);
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+
+  const doSearch = async () => {
+    const q = document.getElementById('mod-search-input').value.trim();
+    if (!q) return;
+    const results = document.getElementById('mod-results');
+    results.innerHTML = '<div style="text-align:center;padding:40px 0;color:rgba(168,85,247,0.4);font-size:13px;">🔍 Поиск...</div>';
+
+    try {
+      // Используем fetch напрямую — Modrinth открытый API, CORS разрешён
+      const res = await fetch(`https://api.modrinth.com/v2/search?query=${encodeURIComponent(q)}&facets=[["project_type:mod"]]&limit=20`);
+      const data = await res.json();
+
+      if (!data.hits || data.hits.length === 0) {
+        results.innerHTML = '<div style="text-align:center;padding:40px 0;color:rgba(168,85,247,0.35);font-size:13px;">Ничего не найдено</div>';
+        return;
+      }
+
+      results.innerHTML = '';
+      data.hits.forEach(mod => {
+        const card = document.createElement('div');
+        card.style.cssText = 'display:flex;align-items:center;gap:12px;padding:10px 10px;border-radius:12px;cursor:pointer;transition:background .15s;margin-bottom:4px;';
+        card.innerHTML = `
+          <img src="${mod.icon_url || ''}" onerror="this.style.display='none'" style="width:40px;height:40px;border-radius:8px;object-fit:cover;flex-shrink:0;background:rgba(168,85,247,0.1);">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:700;color:#e9d5ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${mod.title}</div>
+            <div style="font-size:11px;color:rgba(192,132,252,0.55);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${mod.description}</div>
+            <div style="font-size:10px;color:rgba(168,85,247,0.45);margin-top:3px;">⬇ ${(mod.downloads||0).toLocaleString()}</div>
+          </div>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(168,85,247,0.5)" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
+        `;
+        card.addEventListener('mouseover', () => card.style.background = 'rgba(168,85,247,0.1)');
+        card.addEventListener('mouseout',  () => card.style.background = 'transparent');
+        card.addEventListener('click', () => openModVersions(mod, closeModal));
+        results.appendChild(card);
+      });
+    } catch(e) {
+      results.innerHTML = `<div style="text-align:center;padding:40px 0;color:#f87171;font-size:13px;">Ошибка: ${e.message}</div>`;
+    }
+  };
+
+  document.getElementById('mod-search-btn').addEventListener('click', doSearch);
+  document.getElementById('mod-search-input').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+  setTimeout(() => document.getElementById('mod-search-input')?.focus(), 100);
+}
+
+async function openModVersions(mod, closeSearch) {
+  // Закрываем поиск, открываем версии
+  closeSearch();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'modver-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(15,5,29,0.88);backdrop-filter:blur(8px);';
+
+  overlay.innerHTML = `
+    <div style="background:linear-gradient(145deg,#1a0b2e,#200d38);border:1px solid rgba(168,85,247,0.25);border-radius:20px;width:520px;max-height:75vh;display:flex;flex-direction:column;font-family:'Montserrat',sans-serif;box-shadow:0 0 80px rgba(168,85,247,0.2);">
+      <div style="display:flex;align-items:center;gap:10px;padding:20px 20px 14px;border-bottom:1px solid rgba(168,85,247,0.1);flex-shrink:0;">
+        <img src="${mod.icon_url||''}" onerror="this.style.display='none'" style="width:32px;height:32px;border-radius:7px;background:rgba(168,85,247,0.1);">
+        <div style="flex:1;">
+          <div style="font-size:15px;font-weight:800;color:#e9d5ff;">${mod.title}</div>
+          <div style="font-size:11px;color:rgba(192,132,252,0.5);margin-top:1px;">Выберите версию для скачивания</div>
+        </div>
+        <button id="modver-close" style="background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.2);border-radius:50%;width:28px;height:28px;color:#c084fc;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
+      </div>
+      <div id="modver-list" style="flex:1;overflow-y:auto;padding:10px 12px;">
+        <div style="text-align:center;padding:40px 0;color:rgba(168,85,247,0.4);font-size:13px;">Загрузка версий...</div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  const closeVer = () => overlay.remove();
+  document.getElementById('modver-close').addEventListener('click', closeVer);
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeVer(); });
+
+  try {
+    const res = await fetch(`https://api.modrinth.com/v2/project/${mod.project_id}/version`);
+    const versions = await res.json();
+    const list = document.getElementById('modver-list');
+
+    if (!versions.length) {
+      list.innerHTML = '<div style="text-align:center;padding:40px 0;color:rgba(168,85,247,0.35);font-size:13px;">Версии не найдены</div>';
+      return;
+    }
+
+    list.innerHTML = '';
+    versions.forEach(ver => {
+      const gameVers = ver.game_versions?.join(', ') || '?';
+      const loaders  = ver.loaders?.join(', ')       || '?';
+      const file =
+        Array.isArray(ver.files)
+          ? (ver.files.find((f) => f.primary) || ver.files[0])
+          : null;
+      if (!file?.url || !file.filename) return;
+
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 10px;border-radius:12px;cursor:pointer;transition:background .15s;margin-bottom:3px;';
+      row.innerHTML = `
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12px;font-weight:700;color:#e9d5ff;">${ver.name}</div>
+          <div style="font-size:10px;color:rgba(192,132,252,0.5);margin-top:2px;">MC: ${gameVers} &nbsp;|&nbsp; ${loaders}</div>
+        </div>
+        <div id="dl-status-${ver.id}" style="font-size:11px;color:rgba(168,85,247,0.5);flex-shrink:0;"></div>
+        <button data-id="${ver.id}" style="background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.3);border-radius:8px;color:#c084fc;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;padding:6px 12px;cursor:pointer;transition:all .2s;flex-shrink:0;">⬇ Скачать</button>
+      `;
+
+      row.addEventListener('mouseover', () => row.style.background = 'rgba(168,85,247,0.08)');
+      row.addEventListener('mouseout',  () => row.style.background = 'transparent');
+
+      row.querySelector('button').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const btn    = row.querySelector('button');
+        const status = document.getElementById(`dl-status-${ver.id}`);
+        btn.disabled = true; btn.textContent = '...'; btn.style.opacity = '.5';
+
+        try {
+          if (!state.selectedVersion) {
+            status.style.color = '#f87171';
+            status.textContent = '✖ Сначала выберите версию MC';
+            btn.textContent = '⬇ Скачать'; btn.style.opacity = '1'; btn.disabled = false;
+            return;
+          }
+          const { path: gameDir } = await amethyst.getInstancePath({
+            version: state.selectedVersion,
+            loader: state.selectedLoader,
+          });
+          if (amethyst.modrinthDownload) {
+            await amethyst.modrinthDownload({ fileUrl: file.url, fileName: file.filename, gameDir });
+            status.style.color = '#a855f7'; status.textContent = '✓ Скачан';
+          } else {
+            amethyst.openExternal(file.url);
+            status.style.color = '#a855f7'; status.textContent = '↗ Открыт';
+          }
+        } catch(err) {
+          status.style.color = '#f87171'; status.textContent = '✖ Ошибка';
+        }
+        btn.textContent = '⬇ Скачать'; btn.style.opacity = '1'; btn.disabled = false;
+      });
+
+      list.appendChild(row);
+    });
+  } catch(e) {
+    document.getElementById('modver-list').innerHTML = `<div style="text-align:center;padding:40px 0;color:#f87171;font-size:13px;">Ошибка: ${e.message}</div>`;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  MODULE: Telegram popup (показывается один раз при первом запуске)
+// ═══════════════════════════════════════════════════════════════════════════
+async function initTgPopup() {
+  const seen = await amethyst.storeGet('tg-popup-seen');
+  if (seen) return;
+
+  // Создаём оверлей
+  const overlay = document.createElement('div');
+  overlay.id = 'tg-overlay';
+  overlay.style.cssText = `
+    position:fixed;inset:0;z-index:9999;
+    display:flex;align-items:center;justify-content:center;
+    background:rgba(15,5,29,0.82);backdrop-filter:blur(6px);
+  `;
+
+  overlay.innerHTML = `
+    <div style="
+      position:relative;
+      background:linear-gradient(145deg,#1a0b2e,#200d38);
+      border:1px solid rgba(168,85,247,0.3);
+      border-radius:20px;
+      padding:36px 40px 32px;
+      width:360px;
+      box-shadow:0 0 60px rgba(168,85,247,0.25);
+      text-align:center;
+      font-family:'Montserrat',sans-serif;
+    ">
+      <!-- Крестик -->
+      <button id="tg-close" style="
+        position:absolute;top:14px;right:16px;
+        background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.2);
+        border-radius:50%;width:28px;height:28px;
+        color:#c084fc;font-size:16px;line-height:1;
+        cursor:pointer;display:flex;align-items:center;justify-content:center;
+        transition:all .2s;
+      ">✕</button>
+
+      <!-- Иконка -->
+      <div style="font-size:48px;margin-bottom:12px;">💎</div>
+
+      <!-- Заголовок -->
+      <div style="font-size:20px;font-weight:800;color:#e9d5ff;margin-bottom:8px;letter-spacing:-.3px;">
+        Добро пожаловать в Amethyst!
+      </div>
+
+      <!-- Текст -->
+      <div style="font-size:13px;color:rgba(192,132,252,0.7);line-height:1.6;margin-bottom:24px;">
+        Подпишись на наш Telegram-канал —<br>
+        там новости, обновления и поддержка.
+      </div>
+
+      <!-- Кнопка -->
+      <button id="tg-go" style="
+        width:100%;padding:13px;
+        background:linear-gradient(135deg,#7c3aed,#a855f7);
+        border:none;border-radius:12px;
+        color:#fff;font-family:'Montserrat',sans-serif;
+        font-size:14px;font-weight:700;letter-spacing:.05em;
+        cursor:pointer;transition:all .2s;
+      ">
+        ✈ Перейти в канал
+      </button>
+
+      <div style="margin-top:12px;font-size:11px;color:rgba(168,85,247,0.35);">
+        Это сообщение больше не появится
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  const close = async () => {
+    overlay.style.opacity = '0';
+    overlay.style.transition = 'opacity .25s';
+    setTimeout(() => overlay.remove(), 260);
+    await amethyst.storeSet('tg-popup-seen', true);
+  };
+
+  $('tg-close').addEventListener('click', close);
+  $('tg-go').addEventListener('click', () => {
+    amethyst.openExternal('https://t.me/amethyst_launcher');
+    close();
+  });
+
+  // Hover на кнопке
+  $('tg-go').addEventListener('mouseover',  () => { $('tg-go').style.opacity = '.85'; $('tg-go').style.transform = 'translateY(-1px)'; });
+  $('tg-go').addEventListener('mouseout',   () => { $('tg-go').style.opacity = '1';   $('tg-go').style.transform = 'none'; });
+}

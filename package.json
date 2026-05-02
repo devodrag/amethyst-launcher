@@ -1,6 +1,6 @@
 {
   "name": "amethyst-launcher",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Amethyst — Minecraft Launcher",
   "main": "main.js",
   "scripts": {
@@ -30,12 +30,15 @@
       "artifactName": "Amethyst-Setup-${version}.${ext}"
     },
     "linux": {
-      "target": "AppImage",
-      "icon": "assets/icon.png"
+      "target": [{ "target": "tar.gz", "arch": ["x64"] }],
+      "category": "Game",
+      "icon": "assets/icon.png",
+      "maintainer": "GodBox"
     },
     "mac": {
-      "target": "dmg",
-      "icon": "assets/icon.icns"
+      "target": [{ "target": "zip", "arch": ["x64", "arm64"] }],
+      "category": "public.app-category.games",
+      "icon": "assets/icon.png"
     }
   },
   "author": "GodBox",
